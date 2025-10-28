@@ -56,7 +56,7 @@ def load_pbm_p4(path, invert=False):
 
 
 
-fb, buf, w, h = load_pbm_p4("/calendar_test.pbm", invert=False)
+fb, buf, w, h = load_pbm_p4("/calendar.pbm", invert=False)
 print("Loaded PBM:", w, "x", h)
 gc.collect()
 print("Free memory:", gc.mem_free())
@@ -64,35 +64,15 @@ print("Free memory:", gc.mem_free())
 epd = epd7in5.EPD_7in5()
 print("Free memory:", gc.mem_free())
 epd.init() 
-epd.Clear()
 print("Free memory:", gc.mem_free())
 gc.collect()
 
-# epd.image1Gray.fill(0xFF)
-
-# epd.image1Gray.text("Waveshare", 5, 10, 0x00)
-# epd.image1Gray.text("Pico_ePaper-7.5", 5, 40, 0x00)
-# epd.image1Gray.text("Raspberry Pico", 5, 70, 0x00)
 epd.display(buf)
 epd.delay_ms(2000)
 
-# epd.image1Gray.vline(10, 90, 60, 0x00)
-# epd.image1Gray.vline(120, 90, 60, 0x00)
-# epd.image1Gray.hline(10, 90, 110, 0x00)
-# epd.image1Gray.hline(10, 150, 110, 0x00)
-# epd.image1Gray.line(10, 90, 120, 150, 0x00)
-# epd.image1Gray.line(120, 90, 10, 150, 0x00)
-# epd.display(epd.buffer_1Gray)
-# epd.delay_ms(2000)
-
-# epd.image1Gray.rect(10, 180, 50, 80, 0x00)
-# epd.image1Gray.fill_rect(70, 180, 50, 80, 0x00)
-# epd.display(epd.buffer_1Gray)
-# epd.delay_ms(2000)
-
-
 
 #epd.Clear()
-epd.delay_ms(2000)
+#epd.delay_ms(2000)
 print("sleep")
 epd.sleep()
+print("Done")
