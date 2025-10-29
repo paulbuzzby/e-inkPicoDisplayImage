@@ -78,30 +78,26 @@ def downloadfile(url, dest_path, last_modified=0):
     BUFSIZE = 1024
 
     buffer = memoryview(bytearray(BUFSIZE))
-    resp = requests.get(url)
-    print(resp.headers)
-    fileDate = resp.headers.get("Last-Modified")
-    print(fileDate)
-    print("File date:", parse_http_date(fileDate))
-    parsedDate = parse_http_date(fileDate)
-    if parsedDate and last_modified >= parsedDate:
-        print("File not modified since last download")
-        resp.close()
-        return
-    socket = resp.raw
-    with open(dest_path, "wb") as fd:
-        while (n := socket.readinto(buffer)) > 0:
-            fd.write(buffer[:n])
-    resp.close()   # Dont forget to close your connection
+    parsedDate = None
+    try: 
+        resp = requests.get(url)
+        print(resp.headers)
+        fileDate = resp.headers.get("Last-Modified") # this is the last modifed of the file on the server
+        print(fileDate)
+        
+        parsedDate = parse_http_date(fileDate)
+        print("paresed HTTP date:", parsedDate, "Last modified from header:", fileDate)
+        if parsedDate and last_modified >= parsedDate:
+            print("File not modified since last download")
+            resp.close()
+            return
+        socket = resp.raw
+        with open(dest_path, "wb") as fd:
+            while (n := socket.readinto(buffer)) > 0:
+                fd.write(buffer[:n])
+    finally:
+        resp.close()   
     return parsedDate
-
-
-def file_mtime(path):
-    try:
-        return uos.stat(path)[8]   # mtime index in MicroPython stat tuple
-    except OSError:
-        return None
-
 
 
 def parse_http_date(h):
@@ -124,6 +120,10 @@ def parse_http_date(h):
     return time.mktime((year, mon, day, hh, mm, ss, 0, 0))
 
 def load_pbm_p4(path, invert=False):
+    '''
+    Load a PBM P4 (binary) image from the filesystem into a FrameBuffer.
+    Returns (FrameBuffer, bytearray buffer, width, height)
+    '''
     # Parse minimal PBM (P4) header
     with open(path, "rb") as f:
         magic = f.readline().strip()
@@ -180,50 +180,53 @@ def main():
     LED = Pin("LED", Pin.OUT)
     shutdownPin = Pin(19, Pin.OUT)
     LED.value(1)  # Turn the LED on
-    cfg = read_config()
-    ssid = cfg["ssid"]
-    pwd = cfg["password"]
-    url = cfg["file_url"]
-    last_modified = cfg.get("last_modified", 0)
-    target = cfg.get("target_path", "/image.pbm")
 
+    try:
+        print("Starting up")
+        cfg = read_config()
+        ssid = cfg["ssid"]
+        pwd = cfg["password"]
+        url = cfg["file_url"]
+        last_modified = cfg.get("last_modified", 0)
+        target = cfg.get("target_path", "/image.pbm")
+        print("Config Read")
 
-    print(file_mtime(target))
+        print("Connecting to WiFi:", ssid)
+        wlan = connect_wifi(ssid, pwd)
+        print("Connected, IP:", wlan.ifconfig()[0])
+    
+        print("Downloading File:", url)
+        newDate = downloadfile(url, target, last_modified)
+        wlan.deinit()
+        print("File download complete")
+        print("WiFi disconnected")
+        if newDate:
+            print("File on server was newer than local copy and was downloaded. Lets update")
+            print("Updating last_modified to", newDate)
+            
 
-    print("Connecting to WiFi:", ssid)
-    wlan = connect_wifi(ssid, pwd)
-    print("Connected, IP:", wlan.ifconfig()[0])
-   
-    print("Downloading:", url)
-    newDate = downloadfile(url, target, last_modified)
-    wlan.deinit()
-    if newDate:
-        print("Updating last_modified to", newDate)
-        cfg["last_modified"] = newDate
-        write_cfg(cfg)
+            fb, buf, w, h = load_pbm_p4("/calendar.pbm", invert=False)
+            print("Loaded PBM from file system:", w, "x", h)
+            gc.collect()
 
-    fb, buf, w, h = load_pbm_p4("/calendar.pbm", invert=False)
-    print("Loaded PBM:", w, "x", h)
-    gc.collect()
-    print("Free memory:", gc.mem_free())
+            epd = epd7in5.EPD_7in5()
+            epd.init() 
+            gc.collect()
+            print("Displaying image")
+            epd.display(buf)
+            epd.delay_ms(500)
 
-    epd = epd7in5.EPD_7in5()
-    print("Free memory:", gc.mem_free())
-    epd.init() 
-    print("Free memory:", gc.mem_free())
-    gc.collect()
+            print("sleep")
+            epd.sleep()
+            cfg["last_modified"] = newDate
+            write_cfg(cfg)
+        else:
+            print("File on server not newer than local copy, not updating display")
 
-    epd.display(buf)
-    epd.delay_ms(2000)
-
-
-    #epd.Clear()
-    #epd.delay_ms(2000)
-    print("sleep")
-    epd.sleep()
-    print("Done")
-
-    shutdownPin.value(1)  # Turn the shutdown pin on
+        print("Done. Shutting down.")
+    finally:
+        shutdownPin.value(1)  # Signal shutdown
+        print("Should only see this if something went wrong before shutdown or testing")
 
 if __name__ == "__main__":
     main()
